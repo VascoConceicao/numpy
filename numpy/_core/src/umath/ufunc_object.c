@@ -4225,10 +4225,20 @@ replace_with_wrapped_result_and_return(PyUFuncObject *ufunc,
             original_out = PyTuple_GET_ITEM(full_args.out, out_i);
         }
 
+        /* Decide whether to return a scalar */
+        int is_0d = (PyArray_NDIM(result_arrays[out_i]) == 0);
+        int is_object_dtype = (
+            PyArray_DESCR(result_arrays[out_i])->type_num == NPY_OBJECT
+        );
+        int is_multiply = (
+            strcmp(ufunc_get_name_cstr(ufunc), "multiply") == 0
+        );
+        /* Always try to return a scalar, except if dtype is object and operation is multiplication */
+        npy_bool return_scalar = is_0d && !(is_multiply && is_object_dtype);
+
         PyObject *ret_i = npy_apply_wrap(
                 (PyObject *)result_arrays[out_i], original_out, wrap, wrap_type,
-                /* Always try to return a scalar right now: */
-                &context, PyArray_NDIM(result_arrays[out_i]) == 0, NPY_TRUE);
+                &context, return_scalar, NPY_TRUE);
         Py_CLEAR(result_arrays[out_i]);
         if (ret_i == NULL) {
             goto fail;
