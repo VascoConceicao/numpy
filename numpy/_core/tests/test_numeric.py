@@ -3947,6 +3947,14 @@ class TestCross:
         with pytest.raises(ValueError) as exc:
             np.cross(a, b)
         assert "At least one array has zero dimension" in str(exc.value)
+    
+    def test_object_dtype(self):
+        # Issue #27435
+        u = np.array([1, 2, -1], dtype=object)
+        v = np.array([-1, 1, 0], dtype=object)
+        z = np.array([1, 1, 3], dtype=object)
+        assert_equal(np.cross(u, v), z)
+        assert_equal(np.cross(v, u), -z)
 
 
 def test_outer_out_param():
