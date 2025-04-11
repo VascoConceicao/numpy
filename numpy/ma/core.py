@@ -4082,8 +4082,66 @@ class MaskedArray(ndarray):
             res = self.filled(self.fill_value)
         return res
 
+    def _format_object(self, x):
+        """
+        Format an object for printing based on current print options.
+        """
+        # retrieve current NumPy print options
+        print_opts = np.get_printoptions()
+        precision = print_opts['precision']
+        suppress = print_opts['suppress']
+        floatmode = print_opts['floatmode']
+
+        # handle special cases: masked values, strings, and non-float types
+        if (isinstance(x, str) or not isinstance(x, (float, np.floating))):
+            return str(x)
+        try:
+            # format float values based on the specified floatmode
+            if floatmode in {'unique', 'maxprec', 'maxprec_equal'}:
+                return np.format_float_positional(
+                    float(x),
+                    precision=precision,
+                    unique=(floatmode == 'unique'),
+                    trim='k',
+                    sign='-' if not suppress else '',
+                    pad_left=(floatmode == 'maxprec_equal')
+                )
+            else:
+                # default float formatting
+                return f"{x:.{precision}f}"
+        except Exception:
+            # fallback to string representation in case of formatting errors
+            return str(x)
+
+    def _build_formatted_string(self, formatted_array):
+        """
+        Format an object array to string using current print options.
+        """
+        print_opts = np.get_printoptions()
+        linewidth = print_opts['linewidth']
+
+        # convert the array to a string with custom object formatting
+        formatted_array = np.array2string(
+            formatted_array,
+            formatter={'object': self._format_object},
+            max_line_width=linewidth
+        )
+        return formatted_array
+
     def __str__(self):
-        return str(self._insert_masked_print())
+        # handle 0-dimensional unmasked arrays by returning the scalar value
+        if self.shape == () and not self.mask:
+            return str(self.item())
+
+        res = self._insert_masked_print()
+        # if the result is a subclass with its own __str__, use that
+        if (type(res) is not np.ndarray
+            and hasattr(res, '__str__')
+            and type(res).__str__ is not np.ndarray.__str__):
+            return res.__str__()
+            
+        # otherwise, build the formatted string using the custom formatter
+        return self._build_formatted_string(res)
 
     def __repr__(self):
         """

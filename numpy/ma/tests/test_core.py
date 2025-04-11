@@ -866,6 +866,21 @@ class TestMaskedArray:
         control = "(0, [[--, 0.0, --], [0.0, 0.0, --]], 0.0)"
         assert_equal(str(t_2d0), control)
 
+    def test_precise_printoption(self):
+        # Test printing a masked array w/ floats and precise print option. Issue #28685
+        with np.printoptions(precision=2, suppress=True, floatmode='fixed'):
+            # Create a masked array with a lower triangular mask
+            mask = np.tri(5, dtype=bool)
+            masked_array = np.ma.MaskedArray(np.ones((5, 5)) * 0.0001, mask=mask)
+            control = (
+                "[[-- 0.00 0.00 0.00 0.00]\n"
+                " [-- -- 0.00 0.00 0.00]\n"
+                " [-- -- -- 0.00 0.00]\n"
+                " [-- -- -- -- 0.00]\n"
+                " [-- -- -- -- --]]"
+            )
+            assert_equal(str(masked_array), control)
+
     def test_flatten_structured_array(self):
         # Test flatten_structured_array on arrays
         # On ndarray
