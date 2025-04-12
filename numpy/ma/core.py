@@ -32,7 +32,7 @@ from typing import Dict
 import numpy as np
 import numpy._core.umath as umath
 import numpy._core.numerictypes as ntypes
-from numpy._core import multiarray as mu
+from numpy._core import multiarray as mu, arrayprint
 from numpy import ndarray, amax, amin, iscomplexobj, bool_, _NoValue, angle
 from numpy import array as narray, expand_dims, iinfo, finfo
 from numpy._core.numeric import normalize_axis_tuple
@@ -4081,9 +4081,88 @@ class MaskedArray(ndarray):
         else:
             res = self.filled(self.fill_value)
         return res
+    
+    def _format_object(self, x):
+        """
+        Format an object for printing based on current print options.
+        """
+        # handle non-float types
+        if not isinstance(x, (float, np.floating)):
+            return str(x)
+
+        print_opts = np.get_printoptions()
+        precision = print_opts['precision']
+        suppress_small = print_opts['suppress']
+        floatmode = print_opts['floatmode']
+        legacy = print_opts['legacy']
+        if legacy is None:
+            legacy = 201   # default value for legacy
+
+        # if scalar, return formatted directly
+        if np.ndim(self.data) == 0:
+            return np.format_float_positional(float(x), precision=precision, trim='0')
+
+        # filter floating-point values
+        floating_data = [
+            [value for value in outer if isinstance(value, (float, np.floating))]
+            for outer in self.data
+        ]
+        floating_data = np.array(floating_data)
+        
+        formatter = arrayprint.FloatingFormat(
+            floating_data, precision, floatmode, suppress_small, legacy=legacy
+        )
+        min_digits = formatter.min_digits
+        exp_format = formatter.exp_format
+        pad_left = formatter.pad_left
+        pad_right = formatter.pad_right
+        return self._apply_floatmode(x, exp_format, floatmode, precision, min_digits, pad_right)
+
+
+    def _apply_floatmode(self, x, exp_format, floatmode, precision, min_digits, pad_right):
+        """Helper function to handle floatmode formatting."""
+        if exp_format:
+            return np.format_float_scientific(float(x), precision=precision)
+
+        if floatmode == 'fixed':
+            return np.format_float_positional(float(x), precision=precision)
+
+        elif floatmode == 'unique':
+            return np.format_float_positional(float(x), unique=True)
+
+        elif floatmode == 'maxprec':
+            return np.format_float_positional(
+                float(x), precision=pad_right, trim='0'
+            )
+
+        elif floatmode == 'maxprec_equal':
+            return np.format_float_positional(float(x), precision=min_digits)
+
+    def _build_formatted_string(self, formatted_array):
+        """
+        Format an object array to string using current print options.
+        """
+        # convert the array to a string with custom object formatting
+        formatted_array = np.array2string(
+            formatted_array,
+            formatter={'object': self._format_object}
+        )
+        return formatted_array 
 
     def __str__(self):
-        return str(self._insert_masked_print())
+        # handle 0-dimensional unmasked arrays by returning the scalar value
+        if self.shape == () and not self.mask:
+            return str(self.item())
+
+        res = self._insert_masked_print()
+        # if the result is a subclass with its own __str__, use that
+        if (type(res) is not np.ndarray
+            and hasattr(res, '__str__')
+            and type(res).__str__ is not np.ndarray.__str__):
+            return res.__str__()
+            
+        # otherwise, build the formatted string using the custom formatter
+        return self._build_formatted_string(res)
 
     def __repr__(self):
         """

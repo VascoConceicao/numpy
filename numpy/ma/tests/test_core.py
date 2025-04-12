@@ -866,6 +866,73 @@ class TestMaskedArray:
         control = "(0, [[--, 0.0, --], [0.0, 0.0, --]], 0.0)"
         assert_equal(str(t_2d0), control)
 
+    def test_floatmode_printoption(self):
+        # Test printing a masked array w/ different float modes and precise print options. Issue #28685
+        with np.printoptions(precision=2, suppress=True, floatmode='fixed'):
+            # Create a masked array with a lower triangular mask
+            mask = np.tri(5, dtype=bool)
+            masked_array = np.ma.MaskedArray(np.ones((5, 5)) * 0.0001, mask=mask)
+            control = (
+                "[[-- 0.00 0.00 0.00 0.00]\n"
+                " [-- -- 0.00 0.00 0.00]\n"
+                " [-- -- -- 0.00 0.00]\n"
+                " [-- -- -- -- 0.00]\n"
+                " [-- -- -- -- --]]"
+            )
+            assert_equal(str(masked_array), control)
+
+        with np.printoptions(precision=2, suppress=True, floatmode='unique'):
+            mask = np.tri(5, dtype=bool)
+            masked_array = np.ma.MaskedArray(np.ones((5, 5)) * 0.0001, mask=mask)
+            control = (
+                "[[-- 0.0001 0.0001 0.0001 0.0001]\n"
+                " [-- -- 0.0001 0.0001 0.0001]\n"
+                " [-- -- -- 0.0001 0.0001]\n"
+                " [-- -- -- -- 0.0001]\n"
+                " [-- -- -- -- --]]"
+            )
+            assert_equal(str(masked_array), control)
+
+        # if trail='k' starts to work, test needs to be adjusted
+        with np.printoptions(precision=2, suppress=True, floatmode='maxprec'):
+            mask = np.array([
+                [True, False, False, False],
+                [False, True, False, False],
+                [False, False, True, False]
+            ])
+            data = np.array([
+                [0.12345678, 0.00001234, 1.0, 100.0],
+                [0.5, 0.025, 0.333333, 0.999999],
+                [0.0, 1.5, 2.25, 3.125]
+            ])
+            masked_array = np.ma.MaskedArray(data, mask=mask)
+            control = (
+                "[[-- 0.0 1.0 100.0]\n"
+                " [0.5 -- 0.33 1.0]\n"
+                " [0.0 1.5 -- 3.12]]"
+            )
+            assert_equal(str(masked_array), control)
+            
+        # if trail='k' starts to work, test needs to be adjusted
+        with np.printoptions(precision=3, suppress=True, floatmode='maxprec_equal'):
+            mask = np.array([
+                [True, False, False, False],
+                [False, True, False, False],
+                [False, False, True, False]
+            ])
+            data = np.array([
+                [0.12345678, 0.00001234, 1.0, 100.0],
+                [0.5, 0.025, 0.333333, 0.999999],
+                [0.0, 1.5, 2.25, 3.125]
+            ])
+            masked_array = np.ma.MaskedArray(data, mask=mask)
+            control = (
+                "[[-- 0.000 1. 100.]\n"
+                " [0.5 -- 0.333 1.]\n"
+                " [0. 1.5 -- 3.125]]"
+            )
+            assert_equal(str(masked_array), control)
+
     def test_flatten_structured_array(self):
         # Test flatten_structured_array on arrays
         # On ndarray
