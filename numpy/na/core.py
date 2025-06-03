@@ -85,11 +85,9 @@ class NamedArray:
         return self._array.__array_interface__
     
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        """Handle universal functions while preserving named dimensions."""
-        # Convert NamedArray inputs to regular arrays
         args = []
         named_input = None
-        
+
         for input_ in inputs:
             if isinstance(input_, NamedArray):
                 args.append(input_._array)
@@ -97,23 +95,42 @@ class NamedArray:
                     named_input = input_
             else:
                 args.append(input_)
-        
-        # Call the ufunc
+
         result = getattr(ufunc, method)(*args, **kwargs)
-        
-        # Wrap result if it's an array and we have named dimensions
-        if isinstance(result, np.ndarray) and named_input is not None:
-            # For reductions, we need to handle dimension changes
-            if result.ndim < named_input.ndim:
-                # This is likely a reduction - we'll need to infer which dims were reduced
-                # For now, just create generic names
-                new_dim_names = [f"dim_{i}" for i in range(result.ndim)]
+
+        if named_input is None:
+            return result  # no NamedArray involved, just return raw result
+
+        def infer_dim_names(result_array):
+            if not isinstance(result_array, np.ndarray):
+                return result_array
+
+            if result_array.ndim == named_input.ndim:
+                return named_input._dim_names
+            elif kwargs.get('keepdims', False):
+                return named_input._dim_names
             else:
-                new_dim_names = named_input._dim_names
-            
-            return NamedArray(result, new_dim_names)
-        
-        return result
+                # Try to detect reduced axes
+                axis = kwargs.get('axis', None)
+                if axis is None:
+                    return []
+                if isinstance(axis, int):
+                    axis = [axis]
+                elif isinstance(axis, tuple):
+                    axis = list(axis)
+                # Drop reduced axes
+                return [name for i, name in enumerate(named_input._dim_names) if i not in axis]
+
+        if isinstance(result, tuple):
+            return tuple(
+                NamedArray(res, infer_dim_names(res)) if isinstance(res, np.ndarray) else res
+                for res in result
+            )
+        elif isinstance(result, np.ndarray):
+            return NamedArray(result, infer_dim_names(result))
+        else:
+            return result
+
     
     def __getitem__(self, key):
         """Handle slicing while preserving appropriate dimension names."""
@@ -148,6 +165,99 @@ class NamedArray:
     def __str__(self):
         """String representation."""
         return f"NamedArray with dimensions {dict(zip(self._dim_names, self.shape))}\n{self._array}"
+
+    def __add__(self, other):
+        """Addition operator (+)."""
+        return np.add(self, other)
+
+    def __radd__(self, other):
+        """Reverse addition (other + self)."""
+        return np.add(other, self)
+
+    def __sub__(self, other):
+        """Subtraction operator (-)."""
+        return np.subtract(self, other)
+
+    def __rsub__(self, other):
+        """Reverse subtraction (other - self)."""
+        return np.subtract(other, self)
+
+    def __mul__(self, other):
+        """Multiplication operator (*)."""
+        return np.multiply(self, other)
+
+    def __rmul__(self, other):
+        """Reverse multiplication (other * self)."""
+        return np.multiply(other, self)
+
+    def __truediv__(self, other):
+        """Division operator (/)."""
+        return np.divide(self, other)
+
+    def __rtruediv__(self, other):
+        """Reverse division (other / self)."""
+        return np.divide(other, self)
+
+    def __floordiv__(self, other):
+        """Floor division operator (//)."""
+        return np.floor_divide(self, other)
+
+    def __rfloordiv__(self, other):
+        """Reverse floor division (other // self)."""
+        return np.floor_divide(other, self)
+
+    def __pow__(self, other):
+        """Power operator (**)."""
+        return np.power(self, other)
+
+    def __rpow__(self, other):
+        """Reverse power (other ** self)."""
+        return np.power(other, self)
+
+    def __mod__(self, other):
+        """Modulo operator (%)."""
+        return np.mod(self, other)
+
+    def __rmod__(self, other):
+        """Reverse modulo (other % self)."""
+        return np.mod(other, self)
+
+    def __neg__(self):
+        """Unary negation (-self)."""
+        return np.negative(self)
+
+    def __pos__(self):
+        """Unary positive (+self)."""
+        return np.positive(self)
+
+    def __abs__(self):
+        """Absolute value (abs(self))."""
+        return np.abs(self)
+
+    # Comparison operators
+    def __eq__(self, other):
+        """Equality operator (==)."""
+        return np.equal(self, other)
+
+    def __ne__(self, other):
+        """Not equal operator (!=)."""
+        return np.not_equal(self, other)
+
+    def __lt__(self, other):
+        """Less than operator (<)."""
+        return np.less(self, other)
+
+    def __le__(self, other):
+        """Less than or equal operator (<=)."""
+        return np.less_equal(self, other)
+
+    def __gt__(self, other):
+        """Greater than operator (>)."""
+        return np.greater(self, other)
+
+    def __ge__(self, other):
+        """Greater than or equal operator (>=)."""
+        return np.greater_equal(self, other)
     
     def reshape_named(self, shape_dict: Dict[str, Union[int, Tuple[str, ...]]]) -> 'NamedArray':
         """
@@ -217,72 +327,45 @@ class NamedArray:
     def transpose_named(self, axes_names: List[str]) -> 'NamedArray':
         """
         Transpose array using named dimensions.
-        
-        Parameters
-        ----------
-        axes_names : list of str
-            List of dimension names in the desired order
-        
-        Returns
-        -------
-        NamedArray
-            Transposed array with reordered dimensions
         """
+        # Check for invalid names first
+        invalid_names = [name for name in axes_names if name not in self._dim_names]
+        if invalid_names:
+            raise ValueError(f"Invalid dimension names: {invalid_names}")
+
         if len(axes_names) != len(self._dim_names):
-            raise ValueError(f"Number of axes ({len(axes_names)}) must match "
-                           f"array dimensions ({len(self._dim_names)})")
-        
-        # Check that all provided names exist
-        for name in axes_names:
-            if name not in self._dim_names:
-                raise ValueError(f"Dimension name '{name}' not found in array")
-        
-        # Check for duplicates
+            raise ValueError(
+                f"Number of axes ({len(axes_names)}) must match "
+                f"array dimensions ({len(self._dim_names)})"
+            )
+
         if len(set(axes_names)) != len(axes_names):
             raise ValueError("Axis names must be unique")
-        
-        # Create the axes permutation
+
         axes = [self._dim_names.index(name) for name in axes_names]
-        
-        # Perform the transpose
         transposed_array = self._array.transpose(axes)
         return NamedArray(transposed_array, axes_names)
-    
+
     def sum_named(self, axis: Union[str, List[str]], keepdims: bool = False) -> 'NamedArray':
         """
         Sum along named dimensions.
-        
-        Parameters
-        ----------
-        axis : str or list of str
-            Dimension name(s) to sum along
-        keepdims : bool, default False
-            Whether to keep reduced dimensions
-        
-        Returns
-        -------
-        NamedArray
-            Array with specified dimensions summed
         """
         if isinstance(axis, str):
             axis = [axis]
-        
-        # Convert names to indices
-        axis_indices = []
-        for name in axis:
-            if name not in self._dim_names:
-                raise ValueError(f"Dimension name '{name}' not found in array")
-            axis_indices.append(self._dim_names.index(name))
-        
-        # Perform the sum
+
+        # Validate and convert names to indices
+        invalid_names = [name for name in axis if name not in self._dim_names]
+        if invalid_names:
+            raise ValueError(f"Cannot sum over nonexistent dimensions: {invalid_names}")
+
+        axis_indices = [self._dim_names.index(name) for name in axis]
         result = np.sum(self._array, axis=tuple(axis_indices), keepdims=keepdims)
-        
-        # Update dimension names
+
         if keepdims:
             new_dim_names = self._dim_names.copy()
         else:
             new_dim_names = [name for name in self._dim_names if name not in axis]
-        
+
         return NamedArray(result, new_dim_names)
     
     def mean_named(self, axis: Union[str, List[str]], keepdims: bool = False) -> 'NamedArray':

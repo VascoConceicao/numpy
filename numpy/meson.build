@@ -321,6 +321,7 @@ pure_subdirs = [
   'doc',
   'f2py',
   'lib',
+  'na',
   'ma',
   'matrixlib',
   'polynomial',
