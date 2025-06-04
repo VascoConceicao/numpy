@@ -229,6 +229,7 @@ from numpy import (
     fft,
     lib,
     linalg,
+    na,
     ma,
     polynomial,
     random,

@@ -631,7 +631,7 @@ else:
     # (experimental label) are not added here, because `from numpy import *`
     # must not raise any warnings - that's too disruptive.
     __numpy_submodules__ = {
-        "linalg", "fft", "dtypes", "random", "polynomial", "ma",
+        "linalg", "fft", "dtypes", "random", "polynomial", "na", "ma",
         "exceptions", "lib", "ctypeslib", "testing", "typing",
         "f2py", "test", "rec", "char", "core", "strings",
     }
