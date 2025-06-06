@@ -22,3 +22,5 @@ from numpy._pytesttester import PytestTester
 
 test = PytestTester(__name__)
 del PytestTester
+
+Implement named arrays for numpy (dimension naming for numpy arrays)
