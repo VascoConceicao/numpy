@@ -187,7 +187,7 @@ jobs:
           path: ./wheelhouse/*.whl
 
       - name: install micromamba
-        uses: mamba-org/setup-micromamba@0dea6379afdaffa5d528b3d1dabc45da37f443fc
+        uses: mamba-org/setup-micromamba@b09ef9b599704322748535812ca03efb2625677b
         if: ${{ matrix.buildplat[1] != 'win_arm64' }} # unsupported platform at the moment
         with:
           # for installation of anaconda-client, required for upload to
@@ -280,7 +280,7 @@ jobs:
           name: sdist
           path: ./dist/*
 
-      - uses: conda-incubator/setup-miniconda@505e6394dae86d6a5c7fbb6e3fb8938e3e863830 # v3.1.1
+      - uses: conda-incubator/setup-miniconda@835234971496cad1653abb28a638a281cf32541f # v3.2.0
         with:
           # for installation of anaconda-client, required for upload to
           # anaconda.org
