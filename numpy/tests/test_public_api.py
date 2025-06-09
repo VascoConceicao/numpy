@@ -123,6 +123,7 @@ PUBLIC_MODULES = ['numpy.' + s for s in [
     "lib.scimath",
     "lib.stride_tricks",
     "linalg",
+    "na",
     "ma",
     "ma.extras",
     "ma.mrecords",
